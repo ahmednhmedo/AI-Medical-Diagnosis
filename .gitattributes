@@ -1,0 +1,2 @@
+artifacts_transformer/model/model.safetensors filter=lfs diff=lfs merge=lfs -text
+artifacts_baseline/clf.pkl filter=lfs diff=lfs merge=lfs -text

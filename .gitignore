@@ -19,6 +19,6 @@ env/
 # Large data files (too large for GitHub)
 SNOMED CT/
 
-# Large model artifacts (exceed GitHub 100MB limit)
-artifacts_baseline/clf.pkl
-artifacts_transformer/model/model.safetensors
+# Large model artifacts (tracked via Git LFS)
+# artifacts_baseline/clf.pkl
+# artifacts_transformer/model/model.safetensors
