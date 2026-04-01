@@ -1,0 +1,11 @@
+{
+  "accuracy": 0.8179,
+  "f1_macro": 0.7781,
+  "top3_accuracy": 0.9278,
+  "top5_accuracy": 0.9691,
+  "epochs": 4,
+  "num_classes": 291,
+  "train_samples": 1455,
+  "val_samples": 291,
+  "training_time_min": 38.1
+}

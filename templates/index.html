@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Diagnosis AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root { --pico-font-size: 16px; }
+    body { background: #0b1220; color: #e6e8ee; }
+    header, main { max-width: 1020px; margin-inline: auto; }
+    .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:18px; }
+    textarea { height: 140px; background:#0f172a; color:#e6e8ee; border:1px solid #243042; }
+    input, select { background:#0f172a; color:#e6e8ee; border:1px solid #243042; }
+    .pill { background:#1f2937; padding:2px 10px; border-radius:999px; font-size:12px; }
+    .pred { background:#0f172a; border:1px solid #243042; border-radius:10px; padding:12px 14px; margin-top:8px; }
+    .muted { color:#9aa3b2; }
+    .warning { color:#f5c94c; font-size:12px; }
+    .rec-block { font-size:13px; margin-top:6px; }
+    .rec-block strong { color:#82b1ff; }
+    .warn-text { color:#f5c94c; }
+    .rec-text { color:#81c784; }
+    .snomed-tag { background:#1a2744; color:#7eb8da; font-size:11px; padding:2px 8px; border-radius:6px; margin-left:6px; font-family:monospace; }
+    .meta-row { display:flex; gap:12px; margin-bottom:8px; }
+    .meta-row > div { flex:1; }
+  </style>
+</head>
+<body>
+  <header class="container">
+    <h2>Medical Diagnosis AI</h2>
+    <p class="muted">Enter symptoms and optional patient info to get AI-powered diagnostic suggestions.</p>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <form id="form" onsubmit="return false;">
+        <div class="grid">
+          <div>
+            <label>Symptoms</label>
+            <textarea id="symptoms" placeholder="fever, dry cough, chest pain, difficulty breathing"></textarea>
+
+            <div class="meta-row">
+              <div>
+                <label for="age">Age (optional)</label>
+                <input type="number" id="age" placeholder="e.g. 35" min="0" max="120" />
+              </div>
+              <div>
+                <label for="gender">Gender (optional)</label>
+                <select id="gender">
+                  <option value="">— not specified —</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label>Settings</label>
+            <div class="grid">
+              <div>
+                <label for="model">Model</label>
+                <select id="model">
+                  <option value="tfidf">TF-IDF (baseline)</option>
+                  <option value="lstm">LSTM (deep learning)</option>
+                  <option value="transformer">BioBERT (transformer)</option>
+                </select>
+              </div>
+              <div>
+                <label for="topk">Top-k</label>
+                <select id="topk">
+                  <option>3</option>
+                  <option selected>5</option>
+                  <option>10</option>
+                </select>
+              </div>
+            </div>
+            <small class="muted">LSTM is strong on short queries. BioBERT captures biomedical semantics.</small>
+            <div style="margin-top:12px;">
+              <button id="btn" class="contrast">Predict</button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h5 style="margin:0;">Predictions</h5>
+        <span id="modelBadge" class="pill muted">model: —</span>
+      </div>
+      <div id="results" style="margin-top:12px;" class="muted">No predictions yet. Enter symptoms above.</div>
+      <p class="warning" style="margin-top:10px;">
+        This tool is for demonstration only and is not a medical diagnosis.
+        If symptoms are severe, seek emergency care immediately.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const form = $("form");
+    const btn = $("btn");
+    const results = $("results");
+    const modelSel = $("model");
+    const topkSel = $("topk");
+    const badge = $("modelBadge");
+    const symptoms = $("symptoms");
+    const ageInput = $("age");
+    const genderSel = $("gender");
+
+    function renderError(msg) {
+      results.innerHTML = `<span style="color:#ff8a8a">Error:</span> ${msg}`;
+    }
+
+    function renderPredictions(items) {
+      if (!items || !items.length) {
+        results.innerHTML = '<span class="muted">No predictions.</span>';
+        return;
+      }
+      results.innerHTML = items.map((p, i) => {
+        let extra = "";
+        if (p.warnings) {
+          extra += `<div class="rec-block"><strong>Warning:</strong> <span class="warn-text">${p.warnings.substring(0, 200)}</span></div>`;
+        }
+        if (p.recommendations) {
+          extra += `<div class="rec-block"><strong>Advice:</strong> <span class="rec-text">${p.recommendations.substring(0, 200)}</span></div>`;
+        }
+        let snomedTag = "";
+        if (p.snomed_code) {
+          snomedTag = `<span class="snomed-tag" title="${p.snomed_term || ''}">SNOMED: ${p.snomed_code}</span>`;
+        }
+        return `
+          <div class="pred">
+            <strong>${i+1}. ${p.label}</strong>
+            <span class="muted"> — score ${p.score.toFixed(3)}</span>
+            ${snomedTag}
+            ${extra}
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function callPredict() {
+      const text = symptoms.value.trim();
+      const model = modelSel.value;
+      const k = parseInt(topkSel.value, 10);
+      const age = ageInput.value.trim();
+      const gender = genderSel.value;
+
+      badge.textContent = `model: ${model}`;
+      results.textContent = "Thinking…";
+
+      if (!text) { renderError("Please enter symptoms."); return; }
+
+      const body = { text, k, model };
+      if (age) body.age = age;
+      if (gender) body.gender = gender;
+
+      try {
+        const resp = await fetch("/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+
+        const raw = await resp.text();
+        let data = null;
+        try { data = JSON.parse(raw); } catch { /* leave data null */ }
+
+        if (!resp.ok) {
+          const msg = data?.detail || raw || `HTTP ${resp.status}`;
+          renderError(msg);
+          return;
+        }
+
+        badge.textContent = `model: ${data.model || model}`;
+        renderPredictions(data.predictions);
+      } catch (e) {
+        renderError(e.message || "Network error.");
+      }
+    }
+
+    btn.addEventListener("click", callPredict);
+    form.addEventListener("submit", callPredict);
+  </script>
+</body>
+</html>

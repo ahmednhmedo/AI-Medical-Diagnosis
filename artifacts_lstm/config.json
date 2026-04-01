@@ -1,0 +1,6 @@
+{
+  "maxlen": 20,
+  "vocab_size": 2075,
+  "num_classes": 291,
+  "ensemble_weight": 0.1
+}
